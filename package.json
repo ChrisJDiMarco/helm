@@ -14,6 +14,20 @@
   },
   "author": "Chris DiMarco",
   "license": "MIT",
+  "build": {
+    "appId": "com.chrisdimarco.helm",
+    "productName": "Helm",
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "icon": "assets/icon.png"
+    }
+  },
   "devDependencies": {
     "electron": "^29.0.0"
   }

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background gradient — deep navy to midnight purple -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#0b0b18"/>
+      <stop offset="55%"  stop-color="#110e2b"/>
+      <stop offset="100%" stop-color="#1a1040"/>
+    </linearGradient>
+
+    <!-- Subtle purple radial bloom behind the wheel -->
+    <radialGradient id="bloom" cx="50%" cy="50%" r="42%">
+      <stop offset="0%"   stop-color="#7c6cfc" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#7c6cfc" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Wheel / ring gradient -->
+    <linearGradient id="wheelGrad" x1="0" y1="-1" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#c4baff"/>
+      <stop offset="100%" stop-color="#7c6cfc"/>
+    </linearGradient>
+
+    <!-- Knob gradient (slightly brighter) -->
+    <radialGradient id="knobGrad" cx="35%" cy="30%" r="65%">
+      <stop offset="0%"   stop-color="#d4cdff"/>
+      <stop offset="100%" stop-color="#8878fd"/>
+    </radialGradient>
+
+    <!-- Hub gradient -->
+    <radialGradient id="hubGrad" cx="35%" cy="30%" r="70%">
+      <stop offset="0%"   stop-color="#c0b8ff"/>
+      <stop offset="100%" stop-color="#6b5cf5"/>
+    </radialGradient>
+
+    <!-- Gloss highlight (top half sheen) -->
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="white" stop-opacity="0.13"/>
+      <stop offset="45%"  stop-color="white" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Glow filter on the wheel -->
+    <filter id="wheelGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Outer edge glow (border shimmer) -->
+    <filter id="edgeGlow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Shape clip -->
+    <clipPath id="shape">
+      <rect width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+  </defs>
+
+  <!-- ─── CLIPPED BODY ─────────────────────────────────── -->
+  <g clip-path="url(#shape)">
+
+    <!-- Background -->
+    <rect width="1024" height="1024" fill="url(#bg)"/>
+
+    <!-- Purple bloom -->
+    <rect width="1024" height="1024" fill="url(#bloom)"/>
+
+    <!-- Fine dot-texture overlay (very subtle noise feel) -->
+    <!-- Achieved via a semi-transparent pattern layer -->
+    <rect width="1024" height="1024"
+          fill="none"
+          stroke="rgba(124,108,252,0.06)"
+          stroke-width="0"/>
+
+    <!-- ─── HELM WHEEL ─── -->
+    <g transform="translate(512,512)" filter="url(#wheelGlow)">
+
+      <!-- Outer decorative ring — thin outer band -->
+      <circle r="316" fill="none" stroke="rgba(124,108,252,0.18)" stroke-width="6"/>
+
+      <!-- Main outer ring -->
+      <circle r="300" fill="none" stroke="url(#wheelGrad)" stroke-width="30"/>
+
+      <!-- Inner ring decoration -->
+      <circle r="270" fill="none" stroke="rgba(196,186,255,0.12)" stroke-width="2"/>
+
+      <!-- 8 Spokes + handle knobs -->
+      
+      <line x1="0.00" y1="-88.00" x2="0.00" y2="-290.00"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="0.00" cy="-290.00" r="22" fill="url(#knobGrad)" />
+      <circle cx="0.00" cy="-290.00" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="62.23" y1="-62.23" x2="205.06" y2="-205.06"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="205.06" cy="-205.06" r="22" fill="url(#knobGrad)" />
+      <circle cx="205.06" cy="-205.06" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="88.00" y1="-0.00" x2="290.00" y2="-0.00"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="290.00" cy="-0.00" r="22" fill="url(#knobGrad)" />
+      <circle cx="290.00" cy="-0.00" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="62.23" y1="62.23" x2="205.06" y2="205.06"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="205.06" cy="205.06" r="22" fill="url(#knobGrad)" />
+      <circle cx="205.06" cy="205.06" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="0.00" y1="88.00" x2="0.00" y2="290.00"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="0.00" cy="290.00" r="22" fill="url(#knobGrad)" />
+      <circle cx="0.00" cy="290.00" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="-62.23" y1="62.23" x2="-205.06" y2="205.06"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="-205.06" cy="205.06" r="22" fill="url(#knobGrad)" />
+      <circle cx="-205.06" cy="205.06" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="-88.00" y1="0.00" x2="-290.00" y2="0.00"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="-290.00" cy="0.00" r="22" fill="url(#knobGrad)" />
+      <circle cx="-290.00" cy="0.00" r="10" fill="rgba(255,255,255,0.25)" />
+      <line x1="-62.23" y1="-62.23" x2="-205.06" y2="-205.06"
+            stroke="url(#wheelGrad)" stroke-width="26" stroke-linecap="round"/>
+      <circle cx="-205.06" cy="-205.06" r="22" fill="url(#knobGrad)" />
+      <circle cx="-205.06" cy="-205.06" r="10" fill="rgba(255,255,255,0.25)" />
+
+      <!-- Hub outer ring -->
+      <circle r="88" fill="url(#hubGrad)"/>
+
+      <!-- Hub inner dark well -->
+      <circle r="62" fill="#080812"/>
+
+      <!-- Hub center boss -->
+      <circle r="34" fill="url(#hubGrad)"/>
+
+      <!-- Hub center highlight dot -->
+      <circle r="14" fill="rgba(255,255,255,0.35)"/>
+
+    </g>
+
+    <!-- Gloss sheen overlay (top half) -->
+    <rect width="1024" height="1024" fill="url(#gloss)"/>
+
+    <!-- Hairline border inside the shape -->
+    <rect width="1024" height="1024" rx="224" ry="224"
+          fill="none"
+          stroke="rgba(255,255,255,0.09)"
+          stroke-width="2"
+          filter="url(#edgeGlow)"/>
+
+  </g>
+
+  <!-- ─── OUTER SHADOW RING (outside clip, subtle purple rim) ─── -->
+  <rect width="1024" height="1024" rx="224" ry="224"
+        fill="none"
+        stroke="rgba(124,108,252,0.22)"
+        stroke-width="3"/>
+
+</svg>
