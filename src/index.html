@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Helm — Claude Code Companion</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="grain"></div>
+  <div class="app-shell">
+
+    <!-- ═══ NAV RAIL ═══════════════════════════════════════════════════════════ -->
+    <nav class="nav-rail">
+      <div class="nav-logo">
+        <div class="logo-mark">H</div>
+        <span class="logo-text">HELM</span>
+      </div>
+
+      <div class="nav-items">
+        <button class="nav-item active" data-view="chat" title="Chat (⌘K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+          <span>Chat</span>
+        </button>
+        <button class="nav-item" data-view="agents" title="Agents">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Agents</span>
+        </button>
+        <button class="nav-item" data-view="memory" title="Memory">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+          <span>Memory</span>
+        </button>
+        <button class="nav-item" data-view="logs" title="Logs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>Logs</span>
+        </button>
+        <button class="nav-item" data-view="projects" title="Projects (⌘O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          <span>Projects</span>
+        </button>
+      </div>
+
+      <div class="nav-bottom">
+        <div class="session-status">
+          <div class="session-dot"></div>
+          <span class="session-label">0 sessions</span>
+        </div>
+        <button class="nav-item" data-view="settings" title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ═══ MAIN AREA ══════════════════════════════════════════════════════════ -->
+    <main class="main-area">
+
+      <!-- CHAT -->
+      <section class="view active" id="view-chat">
+        <div class="chat-header">
+          <div class="chat-title" style="-webkit-app-region:no-drag">
+            <div class="model-badge"><div class="model-dot"></div><span id="modelLabel">claude-sonnet-4-6</span></div>
+            <div class="project-badge">
+              <span id="projectName">No project</span>
+            </div>
+          </div>
+          <div class="chat-actions" style="-webkit-app-region:no-drag">
+            <button class="icon-btn" onclick="pickProject()" title="Open project (⌘O)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+            </button>
+            <button class="icon-btn" id="clearChatBtn" title="New chat (⌘N)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M12 4v16m8-8H4"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-area">
+          <div class="hook-indicators">
+            <div class="hook-chip" data-hook="SessionStart">SessionStart</div>
+            <div class="hook-chip" data-hook="PreToolUse">PreToolUse</div>
+            <div class="hook-chip" data-hook="PostToolUse">PostToolUse</div>
+            <div class="hook-chip" data-hook="Stop">Stop</div>
+            <div class="hook-chip" data-hook="PreCompact">PreCompact</div>
+          </div>
+          <div class="input-wrapper">
+            <textarea id="chatInput" placeholder="Ask Claude… (⌘K)" rows="1"></textarea>
+            <button class="send-btn" id="sendBtn" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M12 19V5m-7 7l7-7 7 7"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- AGENTS -->
+      <section class="view" id="view-agents">
+        <div class="view-header"><h2>Agents</h2><div class="view-meta" id="agentMeta">Loading…</div></div>
+        <div class="agent-filters">
+          <button class="filter-chip active" data-filter="all">All</button>
+          <button class="filter-chip" data-filter="project">Project</button>
+          <button class="filter-chip" data-filter="ecc">ECC</button>
+        </div>
+        <div class="agent-grid" id="agentGrid"></div>
+      </section>
+
+      <!-- MEMORY -->
+      <section class="view" id="view-memory">
+        <div class="view-header"><h2>Memory Files</h2><div class="view-meta">Click a file to preview</div></div>
+        <div class="memory-grid" id="memoryGrid"></div>
+        <div class="memory-detail" id="memoryDetail"><div class="memory-detail-placeholder">← Select a file to preview</div></div>
+      </section>
+
+      <!-- LOGS -->
+      <section class="view" id="view-logs">
+        <div class="view-header"><h2>Command Log</h2><div class="view-meta">~/.claude/bash-commands.log · live</div></div>
+        <div class="log-stream" id="logStream"><div class="log-placeholder">Watching for activity…</div></div>
+      </section>
+
+      <!-- PROJECTS -->
+      <section class="view" id="view-projects">
+        <div class="view-header"><h2>Projects</h2><div class="view-meta">Claude Code projects detected on disk</div></div>
+        <div class="projects-actions"><button class="btn-primary" onclick="pickProject()">+ Open Project</button></div>
+        <div class="project-list" id="projectList"></div>
+        <div class="project-current" id="projectPath"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="view-header"><h2>Settings</h2></div>
+        <div class="settings-form">
+          <div class="settings-group">
+            <label>Anthropic API Key</label>
+            <div class="settings-row"><input type="password" id="apiKeyInput" placeholder="sk-ant-…" /><button class="btn-save" id="saveApiKey">Save</button></div>
+            <span class="settings-hint">Stored locally in ~/.helm-config.json · never transmitted elsewhere</span>
+          </div>
+          <div class="settings-group">
+            <label>Model</label>
+            <select id="modelSelect">
+              <option value="claude-sonnet-4-6">claude-sonnet-4-6 (recommended)</option>
+              <option value="claude-opus-4-6">claude-opus-4-6 (deep reasoning)</option>
+              <option value="claude-haiku-4-5-20251001">claude-haiku-4-5 (fast)</option>
+            </select>
+          </div>
+          <div class="settings-group">
+            <label>Current Project</label>
+            <div class="settings-row">
+              <button class="btn-secondary" id="pickProjectBtn">Change Project</button>
+              <button class="btn-secondary" id="openFinderBtn">Open in Finder</button>
+              <button class="btn-secondary" id="openTerminalBtn">Open Terminal</button>
+            </div>
+          </div>
+          <div class="settings-group"><label>Active Hooks (from ~/.claude/settings.json)</label><div class="hooks-display" id="hooksDisplay">Loading…</div></div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ═══ RIGHT PANEL ════════════════════════════════════════════════════════ -->
+    <aside class="right-panel">
+      <div class="panel-section live-feed-section">
+        <div class="panel-header"><span class="panel-title">Live Feed</span><div class="live-indicator"><div class="live-dot"></div><span>LIVE</span></div></div>
+        <div class="live-feed" id="liveFeed"><div class="feed-placeholder">Hook events appear here…</div></div>
+      </div>
+      <div class="panel-section context-section">
+        <div class="panel-header"><span class="panel-title">Memory Health</span><button class="panel-action" id="refreshMemory">↺</button></div>
+        <div class="memory-bars" id="memoryBars"><div class="mem-placeholder">Open a project…</div></div>
+      </div>
+      <div class="panel-section session-section">
+        <div class="panel-header"><span class="panel-title">Active Sessions</span><button class="panel-action" id="refreshSessions">↺</button></div>
+        <div class="sessions-list" id="sessionsList"><div class="session-placeholder">Scanning…</div></div>
+      </div>
+      <div class="panel-section cost-section">
+        <div class="panel-header"><span class="panel-title">Session Cost</span></div>
+        <div class="cost-display">
+          <div class="cost-row"><span class="cost-label">This session</span><span class="cost-value" id="costSession">$0.0000</span></div>
+          <div class="cost-row"><span class="cost-label">Tokens in/out</span><span class="cost-value mono" id="costTokens">0 / 0</span></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

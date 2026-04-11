@@ -1,0 +1,20 @@
+{
+  "name": "helm",
+  "version": "1.0.0",
+  "description": "Visual companion for Claude Code — live hooks, agents, memory, and chat in a native Mac app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect=5858"
+  },
+  "keywords": ["claude-code", "claude", "ai", "electron", "developer-tools"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChrisJDiMarco/helm"
+  },
+  "author": "Chris DiMarco",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^29.0.0"
+  }
+}
