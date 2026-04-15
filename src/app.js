@@ -18,6 +18,7 @@ const state = {
   _currentMsgId: null,
   _streamBuffer: '',
   agents: [],
+  genome: {},
   memoryStats: [],
   sessions: [],
   tokensIn: 0,
@@ -143,11 +144,15 @@ function switchView(id) {
   state.view = id
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === id))
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${id}`))
-  if (id === 'agents' && !state.agents.length) loadAgents()
+  if (id === 'agents') loadAgents()
   if (id === 'memory') loadMemoryView()
   if (id === 'logs') loadLogs()
   if (id === 'settings') populateSettingsUI()
   if (id === 'projects') renderProjectSwitcher()
+  if (id === 'orchestrate') loadOrchestrate()
+  if (id === 'factory') factoryInit?.()
+  if (id === 'cognition') loadCognition?.()
+  if (id === 'mirror') loadMirror?.()
 }
 
 function updateModelLabel() {
@@ -412,6 +417,8 @@ async function previewMemoryFile(file, dir) {
 async function loadAgents() {
   if (!state.project) return
   state.agents = await window.helm.listAgents(state.project.path) || []
+  const store = await window.helm.storeGet()
+  state.genome = store.genome || {}
   const meta = document.getElementById('agentMeta')
   if (meta) { const ecc = state.agents.filter(a => a.isECC).length; meta.textContent = `${state.agents.length} agents · ${state.agents.length - ecc} project · ${ecc} ECC` }
   renderAgentGrid('all')
@@ -426,14 +433,40 @@ async function loadAgents() {
 function renderAgentGrid(filter) {
   const grid = document.getElementById('agentGrid')
   if (!grid) return
-  let list = state.agents
+  let list = [...state.agents]
   if (filter === 'project') list = list.filter(a => !a.isECC)
   if (filter === 'ecc') list = list.filter(a => a.isECC)
-  if (!list.length) { grid.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:20px 0">No agents found in .claude/agents/</div>'; return }
+  if (filter === 'genome') {
+    list = list.filter(a => state.genome?.[a.name]?.uses > 0)
+    list.sort((a, b) => (state.genome?.[b.name]?.uses || 0) - (state.genome?.[a.name]?.uses || 0))
+  }
+  if (!list.length) { grid.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:20px 0">No agents found — check .claude/agents/ directory</div>'; return }
+  const genome = state.genome || {}
+  const maxUses = Math.max(1, ...Object.values(genome).map(g => g.uses || 0))
   grid.innerHTML = list.map(a => {
     const badge = a.isECC ? '<span class="agent-badge ecc">ECC</span>' : '<span class="agent-badge project">PROJECT</span>'
     const model = (a.model || 'sonnet').replace('claude-','').split('-')[0]
-    return `<div class="agent-card ${a.isECC ? 'ecc' : ''}"><div class="agent-card-header"><span class="agent-name">${escHtml(a.name)}</span>${badge}</div><div class="agent-desc">${escHtml((a.description || 'Specialist agent').slice(0,90))}</div><div class="agent-model">${model}</div></div>`
+    const g = genome[a.name]
+    const genomeHtml = g?.uses > 0 ? `
+      <div class="genome-strip">
+        <div class="genome-row">
+          <span class="genome-label">Usage</span>
+          <div class="genome-bar-track"><div class="genome-bar-fill usage" style="width:${Math.round((g.uses/maxUses)*100)}%"></div></div>
+          <span class="genome-val">${g.uses}×</span>
+        </div>
+        <div class="genome-row">
+          <span class="genome-label">Success</span>
+          <div class="genome-bar-track"><div class="genome-bar-fill success" style="width:${Math.round((g.successRate||1)*100)}%"></div></div>
+          <span class="genome-val">${Math.round((g.successRate||1)*100)}%</span>
+        </div>
+        <div class="genome-badge">$${(g.totalCost||0).toFixed(3)} total</div>
+      </div>` : ''
+    return `<div class="agent-card ${a.isECC ? 'ecc' : ''}">
+      <div class="agent-card-header"><span class="agent-name">${escHtml(a.name)}</span>${badge}</div>
+      <div class="agent-desc">${escHtml((a.description || 'Specialist agent').slice(0,90))}</div>
+      <div class="agent-model">${model}</div>
+      ${genomeHtml}
+    </div>`
   }).join('')
 }
 

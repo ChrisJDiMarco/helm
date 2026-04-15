@@ -43,4 +43,31 @@ contextBridge.exposeInMainWorld('helm', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openInFinder: (p) => ipcRenderer.invoke('open-in-finder', p),
   openInTerminal: (p) => ipcRenderer.invoke('open-in-terminal', p),
+
+  // Data Store
+  storeGet: () => ipcRenderer.invoke('store-get'),
+  storeSet: (patch) => ipcRenderer.invoke('store-set', patch),
+  recordAgentUse: (data) => ipcRenderer.invoke('record-agent-use', data),
+  recordDecision: (data) => ipcRenderer.invoke('record-decision', data),
+
+  // Codebase Cognition
+  startCognition: (projectPath) => ipcRenderer.invoke('start-cognition', projectPath),
+  stopCognition: () => ipcRenderer.invoke('stop-cognition'),
+  analyzeFileImpact: (data) => ipcRenderer.invoke('analyze-file-impact', data),
+  getFileComplexity: (filePath) => ipcRenderer.invoke('get-file-complexity', filePath),
+  scanProjectFiles: (projectPath) => ipcRenderer.invoke('scan-project-files', projectPath),
+  onFileChanged: (cb) => ipcRenderer.on('file-changed', (_, d) => cb(d)),
+
+  // Git
+  getGitLog: (projectPath) => ipcRenderer.invoke('get-git-log', projectPath),
+
+  // Dark Factory
+  factoryDecompose: (data) => ipcRenderer.send('factory-decompose', data),
+  onFactoryGraph: (cb) => ipcRenderer.on('factory-graph', (_, d) => cb(d)),
+  onFactoryError: (cb) => ipcRenderer.on('factory-error', (_, d) => cb(d)),
+
+  // Mind Mirror
+  mirrorAnalyze: (data) => ipcRenderer.send('mirror-analyze', data),
+  onMirrorDone: (cb) => ipcRenderer.on('mirror-done', (_, d) => cb(d)),
+  onMirrorError: (cb) => ipcRenderer.on('mirror-error', (_, d) => cb(d)),
 })

@@ -302,6 +302,212 @@ ipcMain.handle('run-wiki-builder', async () => {
   } catch (e) { return { ok: false, error: e.message } }
 })
 
+// ─── Helm Data Store (JSON, atomic writes) ───────────────────────────────────
+const STORE_PATH = path.join(os.homedir(), '.helm-store.json')
+const STORE_DEFAULTS = { genome: {}, sessions: [], decisions: [], patterns: [], cognition: {} }
+
+function loadStore() {
+  try { return { ...STORE_DEFAULTS, ...JSON.parse(fs.readFileSync(STORE_PATH, 'utf8')) } }
+  catch (_) { return { ...STORE_DEFAULTS } }
+}
+function saveStore(store) {
+  const tmp = STORE_PATH + '.tmp'
+  fs.writeFileSync(tmp, JSON.stringify(store, null, 2))
+  fs.renameSync(tmp, STORE_PATH)
+}
+
+ipcMain.handle('store-get', () => loadStore())
+ipcMain.handle('store-set', (_, patch) => { saveStore({ ...loadStore(), ...patch }); return { ok: true } })
+
+ipcMain.handle('record-agent-use', (_, { agentName, sessionId, cost, success }) => {
+  const store = loadStore()
+  if (!store.genome[agentName]) store.genome[agentName] = { uses: 0, sessions: [], successRate: 1.0, totalCost: 0, lastUsed: null }
+  const g = store.genome[agentName]
+  g.uses++; g.totalCost += (cost || 0); g.lastUsed = new Date().toISOString()
+  g.sessions.push({ sessionId: sessionId || 'unknown', cost: cost || 0, success: success !== false, ts: g.lastUsed })
+  if (g.sessions.length > 100) g.sessions = g.sessions.slice(-100)
+  const recent = g.sessions.slice(-20)
+  g.successRate = recent.filter(s => s.success).length / recent.length
+  saveStore(store); return { ok: true }
+})
+
+ipcMain.handle('record-decision', (_, { description, context, source }) => {
+  const store = loadStore()
+  store.decisions.push({ id: Date.now().toString(36), timestamp: new Date().toISOString(), description, context: context || '', source: source || 'chat' })
+  if (store.decisions.length > 500) store.decisions = store.decisions.slice(-500)
+  saveStore(store); return { ok: true }
+})
+
+// ─── Codebase Cognition ───────────────────────────────────────────────────────
+let cognitionWatcher = null
+
+ipcMain.handle('start-cognition', async (_, projectPath) => {
+  if (cognitionWatcher) { try { cognitionWatcher.close() } catch (_) {} cognitionWatcher = null }
+  try {
+    cognitionWatcher = fs.watch(projectPath, { recursive: true }, (eventType, filename) => {
+      if (!filename || filename.includes('node_modules') || filename.includes('.git') || filename.includes('.DS_Store')) return
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const fullPath = path.join(projectPath, filename)
+        let size = 0; try { size = fs.statSync(fullPath).size } catch (_) {}
+        mainWindow.webContents.send('file-changed', { eventType, filename, fullPath, ts: Date.now(), size })
+      }
+    })
+    return { ok: true }
+  } catch (e) { return { ok: false, error: e.message } }
+})
+
+ipcMain.handle('stop-cognition', () => {
+  if (cognitionWatcher) { try { cognitionWatcher.close() } catch (_) {} cognitionWatcher = null }
+  return { ok: true }
+})
+
+ipcMain.handle('analyze-file-impact', async (_, { projectPath, filename }) => {
+  const basename = path.basename(filename, path.extname(filename))
+  try {
+    const out = execSync(
+      `grep -r "${basename}" "${projectPath}" --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx" --include="*.py" -l 2>/dev/null | grep -v node_modules | grep -v ".git" | head -20`,
+      { encoding: 'utf8', timeout: 5000 }
+    )
+    const files = out.split('\n').filter(f => f.trim() && !f.includes(filename))
+    return { impactCount: files.length, impactedFiles: files.slice(0, 8) }
+  } catch (_) { return { impactCount: 0, impactedFiles: [] } }
+})
+
+ipcMain.handle('get-file-complexity', async (_, filePath) => {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8')
+    const lines = content.split('\n').length
+    const fns = (content.match(/function\s+\w+|\w+\s*=\s*(?:async\s*)?\(|=>\s*\{/g) || []).length
+    return { lines, functions: fns, complexity: Math.min(100, Math.round((lines / 8) + (fns * 4))) }
+  } catch (_) { return { lines: 0, functions: 0, complexity: 0 } }
+})
+
+ipcMain.handle('scan-project-files', async (_, projectPath) => {
+  const results = []
+  const exts = ['.js', '.ts', '.jsx', '.tsx', '.py', '.go', '.rs', '.md']
+  function walk(dir, depth = 0) {
+    if (depth > 4) return
+    try {
+      for (const entry of fs.readdirSync(dir)) {
+        if (entry.startsWith('.') || entry === 'node_modules' || entry === 'dist' || entry === 'build') continue
+        const full = path.join(dir, entry)
+        const stat = fs.statSync(full)
+        if (stat.isDirectory()) { walk(full, depth + 1) }
+        else if (exts.includes(path.extname(entry))) {
+          const content = fs.readFileSync(full, 'utf8')
+          const lines = content.split('\n').length
+          results.push({ path: full, relative: path.relative(projectPath, full), lines, size: stat.size, mtime: stat.mtimeMs })
+        }
+      }
+    } catch (_) {}
+  }
+  walk(projectPath)
+  return results.sort((a, b) => b.mtime - a.mtime).slice(0, 60)
+})
+
+// ─── Git log for Mirror ───────────────────────────────────────────────────────
+ipcMain.handle('get-git-log', async (_, projectPath) => {
+  try {
+    const out = execSync(
+      `git -C "${projectPath}" log --no-merges -60 --format="%h|%s|%ai|%an" 2>/dev/null`,
+      { encoding: 'utf8', timeout: 5000 }
+    )
+    return out.split('\n').filter(l => l.trim()).map(line => {
+      const [hash, subject, date, author] = line.split('|')
+      return { hash, subject, date: date?.slice(0, 10), author }
+    })
+  } catch (_) { return [] }
+})
+
+// ─── Dark Factory ─────────────────────────────────────────────────────────────
+ipcMain.on('factory-decompose', async (event, { id, apiKey, model, goal, projectContext }) => {
+  const system = `You are a task decomposition engine for a multi-agent AI coding system called Helm.
+Given a high-level goal, decompose it into a JSON task graph. Return ONLY valid JSON, no prose.
+
+Format:
+{
+  "title": "brief goal title (max 60 chars)",
+  "estimatedTotal": 0.15,
+  "tasks": [
+    {
+      "id": "t1",
+      "name": "Task name",
+      "agent": "agent-name",
+      "prompt": "Exact, self-contained prompt for this agent",
+      "depends": [],
+      "estimatedCost": 0.04,
+      "estimatedMins": 2
+    }
+  ]
+}
+
+Available agents: planner, architect, builder, code-reviewer, security-reviewer, tdd-guide, refactor-cleaner, doc-updater, researcher, analyst
+Rules: max 8 tasks, no dependency cycles, prompts must be self-contained, total cost max $1.00
+Project context: ${projectContext || 'Claude Code project'}`
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: model || 'claude-sonnet-4-6', max_tokens: 2048, system, messages: [{ role: 'user', content: `Decompose this goal:\n\n${goal}` }] })
+    })
+    if (!res.ok) { event.sender.send('factory-error', { id, error: await res.text() }); return }
+    const data = await res.json()
+    const text = data.content[0]?.text || ''
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) { event.sender.send('factory-error', { id, error: 'Could not parse task graph from response' }); return }
+    event.sender.send('factory-graph', { id, graph: JSON.parse(match[0]) })
+  } catch (e) { event.sender.send('factory-error', { id, error: e.message }) }
+})
+
+// ─── Mind Mirror ─────────────────────────────────────────────────────────────
+ipcMain.on('mirror-analyze', async (event, { id, apiKey, model, memoryContent, gitLog, claudeMd, genomeSummary }) => {
+  const system = `You are a project intelligence analyst for an AI development system called Helm.
+Analyze project data and return a structured JSON intelligence report. Return ONLY valid JSON, no prose.
+
+Format:
+{
+  "projectHealth": 82,
+  "momentum": "increasing",
+  "riskLevel": "low",
+  "summary": "2-sentence executive summary",
+  "keyDecisions": [{"description":"...","date":"YYYY-MM-DD","impact":"high"}],
+  "detectedPatterns": [{"pattern":"...","frequency":3,"insight":"...","recommendation":"..."}],
+  "contradictions": [{"a":"...","b":"...","severity":"medium"}],
+  "opportunities": [{"opportunity":"...","effort":"low","impact":"high"}],
+  "weeklyBriefing": "3 paragraph narrative: current state, trajectory, top 3 recommendations",
+  "suggestedRules": ["Add to CLAUDE.md: ..."]
+}`
+
+  const userContent = `Analyze this project intelligence:
+
+## Memory Files
+${memoryContent || '(no memory files found)'}
+
+## Git History (last 60 commits)
+${gitLog?.map(c => `${c.date} ${c.subject}`).join('\n') || '(no git history)'}
+
+## CLAUDE.md
+${claudeMd || '(no CLAUDE.md)'}
+
+## Agent Usage (Genome)
+${genomeSummary || '(no usage data yet)'}`
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: model || 'claude-sonnet-4-6', max_tokens: 4096, system, messages: [{ role: 'user', content: userContent }] })
+    })
+    if (!res.ok) { event.sender.send('mirror-error', { id, error: await res.text() }); return }
+    const data = await res.json()
+    const text = data.content[0]?.text || ''
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) { event.sender.send('mirror-error', { id, error: 'Could not parse analysis' }); return }
+    event.sender.send('mirror-done', { id, analysis: JSON.parse(match[0]) })
+  } catch (e) { event.sender.send('mirror-error', { id, error: e.message }) }
+})
+
 // ─── Shell helpers ────────────────────────────────────────────────────────────
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
 ipcMain.handle('open-in-finder', (_, p) => shell.openPath(p))

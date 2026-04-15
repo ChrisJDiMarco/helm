@@ -25,10 +25,33 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
           <span>Chat</span>
         </button>
-        <button class="nav-item" data-view="agents" title="Agents">
+        <button class="nav-item" data-view="agents" title="Agents + Genome">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           <span>Agents</span>
         </button>
+
+        <div class="nav-divider"></div>
+        <div class="nav-section-label">Intelligence</div>
+
+        <button class="nav-item" data-view="orchestrate" title="Orchestrate — Visual Agent Canvas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="4" r="2"/><circle cx="4" cy="20" r="2"/><circle cx="20" cy="20" r="2"/><line x1="12" y1="6" x2="8" y2="18"/><line x1="12" y1="6" x2="16" y2="18"/><line x1="6" y1="20" x2="18" y2="20"/></svg>
+          <span>Orchestrate</span>
+        </button>
+        <button class="nav-item" data-view="factory" title="Dark Factory — Autonomous Execution">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 8l3 3 4-4 3 3"/></svg>
+          <span>Factory</span>
+        </button>
+        <button class="nav-item" data-view="cognition" title="Cognition — Live Codebase Intelligence">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.663 17h4.673M12 3a6 6 0 00-6 6c0 2.22 1.2 4.15 3 5.19V16a1 1 0 001 1h4a1 1 0 001-1v-1.81A6.001 6.001 0 0018 9a6 6 0 00-6-6z"/></svg>
+          <span>Cognition</span>
+        </button>
+        <button class="nav-item" data-view="mirror" title="Mind Mirror — Project Intelligence">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span>Mirror</span>
+        </button>
+
+        <div class="nav-divider"></div>
+
         <button class="nav-item" data-view="memory" title="Memory">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
           <span>Memory</span>
@@ -67,9 +90,7 @@
         <div class="chat-header">
           <div class="chat-title" style="-webkit-app-region:no-drag">
             <div class="model-badge"><div class="model-dot"></div><span id="modelLabel">claude-sonnet-4-6</span></div>
-            <div class="project-badge">
-              <span id="projectName">No project</span>
-            </div>
+            <div class="project-badge"><span id="projectName">No project</span></div>
           </div>
           <div class="chat-actions" style="-webkit-app-region:no-drag">
             <button class="icon-btn" onclick="pickProject()" title="Open project (⌘O)">
@@ -98,15 +119,137 @@
         </div>
       </section>
 
-      <!-- AGENTS -->
+      <!-- AGENTS + GENOME -->
       <section class="view" id="view-agents">
-        <div class="view-header"><h2>Agents</h2><div class="view-meta" id="agentMeta">Loading…</div></div>
+        <div class="view-header">
+          <h2>Agents</h2>
+          <div class="view-meta" id="agentMeta">Loading…</div>
+        </div>
         <div class="agent-filters">
           <button class="filter-chip active" data-filter="all">All</button>
           <button class="filter-chip" data-filter="project">Project</button>
           <button class="filter-chip" data-filter="ecc">ECC</button>
+          <button class="filter-chip" data-filter="genome">🧬 Top Genome</button>
         </div>
         <div class="agent-grid" id="agentGrid"></div>
+      </section>
+
+      <!-- ORCHESTRATE -->
+      <section class="view" id="view-orchestrate">
+        <div class="orchestrate-toolbar">
+          <div class="orch-meta" id="orchMeta">Loading agents…</div>
+          <div class="orch-legend">
+            <span class="orch-dot jarvis"></span>JARVIS
+            <span class="orch-dot ecc"></span>ECC
+            <span class="orch-dot project"></span>Project
+          </div>
+          <input type="text" id="orchSearch" placeholder="Filter agents…" autocomplete="off" />
+        </div>
+        <canvas id="orchestrate-canvas"></canvas>
+        <div class="orch-inspector" id="orchInspector" style="display:none">
+          <div class="orch-inspector-header">
+            <div class="orch-inspector-name" id="orchInspName">Agent</div>
+            <button class="orch-inspector-close" onclick="closeOrchInspector()">✕</button>
+          </div>
+          <div class="orch-inspector-model" id="orchInspModel"></div>
+          <div class="orch-inspector-desc" id="orchInspDesc"></div>
+          <div class="orch-genome-row" id="orchInspGenome"></div>
+          <button class="btn-primary orch-use-btn" id="orchUseBtn">Use This Agent →</button>
+        </div>
+      </section>
+
+      <!-- DARK FACTORY -->
+      <section class="view" id="view-factory">
+        <div class="factory-layout">
+          <div class="factory-input-panel">
+            <div class="factory-header-row">
+              <h2>Dark Factory</h2>
+              <div class="factory-status-badge" id="factoryStatusBadge">Idle</div>
+            </div>
+            <p class="factory-subhead">Describe a goal. Helm decomposes it into an agent task graph and runs it autonomously.</p>
+            <textarea id="factoryGoal" placeholder="e.g. Build a complete user authentication system with JWT, refresh tokens, and rate limiting…" rows="4"></textarea>
+            <div class="factory-btn-row">
+              <button class="btn-primary" id="factoryDecomposeBtn">⚡ Decompose Goal</button>
+              <button class="btn-secondary" id="factoryLaunchBtn" disabled>▶ Launch Factory</button>
+              <button class="btn-secondary" id="factoryClearBtn">↺ Reset</button>
+            </div>
+            <div class="factory-cost-row" id="factoryCostRow" style="display:none">
+              <span>Estimated cost:</span><strong id="factoryEstCost">$0.00</strong>
+              <span>·</span><span>Tasks:</span><strong id="factoryTaskCount">0</strong>
+            </div>
+          </div>
+          <div class="factory-graph-panel">
+            <svg id="factory-svg" width="100%" height="100%"></svg>
+          </div>
+          <div class="factory-log-panel">
+            <div class="factory-log-header">Execution Log</div>
+            <div class="factory-log" id="factoryLog"><div class="factory-log-empty">Factory output appears here…</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- COGNITION -->
+      <section class="view" id="view-cognition">
+        <div class="cognition-layout">
+          <div class="cognition-left">
+            <div class="view-header" style="padding:0 0 16px">
+              <h2>Codebase Cognition</h2>
+              <div class="cog-status" id="cogStatus">
+                <div class="cog-dot inactive"></div>
+                <span>Inactive</span>
+              </div>
+            </div>
+            <div class="cog-controls">
+              <button class="btn-primary" id="cogStartBtn">▶ Start Watching</button>
+              <button class="btn-secondary" id="cogScanBtn">⟳ Scan Files</button>
+            </div>
+            <div class="cog-file-list" id="cogFileList"><div class="cog-placeholder">Start watching or scan your project to see file intelligence…</div></div>
+          </div>
+          <div class="cognition-right">
+            <div class="cog-live-header">Live Changes</div>
+            <div class="cog-feed" id="cogFeed"><div class="cog-placeholder">File changes appear here in real time…</div></div>
+            <div class="cog-impact-panel" id="cogImpact" style="display:none">
+              <div class="cog-impact-title">Impact Analysis</div>
+              <div id="cogImpactContent"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MIND MIRROR -->
+      <section class="view" id="view-mirror">
+        <div class="mirror-layout">
+          <div class="mirror-header-row">
+            <div>
+              <h2>Mind Mirror</h2>
+              <p class="mirror-subhead">Project intelligence — decisions, patterns, contradictions, trajectory</p>
+            </div>
+            <button class="btn-primary" id="mirrorAnalyzeBtn">✦ Generate Intelligence Report</button>
+          </div>
+
+          <div class="mirror-health-bar" id="mirrorHealthBar" style="display:none">
+            <div class="mirror-metric">
+              <div class="mirror-metric-val" id="mirrorHealth">—</div>
+              <div class="mirror-metric-label">Project Health</div>
+            </div>
+            <div class="mirror-metric">
+              <div class="mirror-metric-val" id="mirrorMomentum">—</div>
+              <div class="mirror-metric-label">Momentum</div>
+            </div>
+            <div class="mirror-metric">
+              <div class="mirror-metric-val" id="mirrorRisk">—</div>
+              <div class="mirror-metric-label">Risk Level</div>
+            </div>
+            <div class="mirror-summary" id="mirrorSummary"></div>
+          </div>
+
+          <div class="mirror-grid" id="mirrorGrid">
+            <div class="mirror-placeholder-state">
+              <div class="mirror-placeholder-icon">✦</div>
+              <div class="mirror-placeholder-text">Click "Generate Intelligence Report" to analyze your project's memory, git history, and usage patterns.</div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- MEMORY -->
@@ -207,5 +350,9 @@
   <script src="app.js"></script>
   <script src="https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js"></script>
   <script src="universe.js"></script>
+  <script src="orchestrate.js"></script>
+  <script src="factory.js"></script>
+  <script src="cognition.js"></script>
+  <script src="mirror.js"></script>
 </body>
 </html>
