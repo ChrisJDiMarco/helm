@@ -6,7 +6,8 @@
   <title>Helm — Claude Code Companion</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="grain"></div>
@@ -39,6 +40,10 @@
         <button class="nav-item" data-view="projects" title="Projects (⌘O)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
           <span>Projects</span>
+        </button>
+        <button class="nav-item" data-view="universe" title="Universe — 3D Knowledge Graph">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10A15.3 15.3 0 018 12a15.3 15.3 0 014-10z"/></svg>
+          <span>Universe</span>
         </button>
       </div>
 
@@ -125,6 +130,26 @@
         <div class="project-current" id="projectPath"></div>
       </section>
 
+      <!-- UNIVERSE -->
+      <section class="view" id="view-universe">
+        <div class="universe-toolbar">
+          <div class="universe-controls-left">
+            <input type="text" id="universeSearch" placeholder="Search nodes…" autocomplete="off" />
+            <button class="universe-btn" id="universeRebuild" title="Re-run wiki-builder and reload">↺ Rebuild</button>
+          </div>
+          <div class="universe-filters" id="universeFilters">
+            <button class="ufilter active" data-type="memory">◆ Memory</button>
+            <button class="ufilter active" data-type="project">● Project</button>
+            <button class="ufilter active" data-type="skill">● Skill</button>
+            <button class="ufilter active" data-type="agent">● Agent</button>
+            <button class="ufilter active" data-type="person">● Person</button>
+            <button class="ufilter active" data-type="team">● Team</button>
+          </div>
+          <div class="universe-meta" id="universeMeta"></div>
+        </div>
+        <div id="universe-canvas"></div>
+      </section>
+
       <!-- SETTINGS -->
       <section class="view" id="view-settings">
         <div class="view-header"><h2>Settings</h2></div>
@@ -180,5 +205,7 @@
     </aside>
   </div>
   <script src="app.js"></script>
+  <script src="https://unpkg.com/3d-force-graph@1/dist/3d-force-graph.min.js"></script>
+  <script src="universe.js"></script>
 </body>
 </html>

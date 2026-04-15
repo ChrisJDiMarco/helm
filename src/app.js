@@ -396,14 +396,16 @@ async function loadMemoryView() {
   if (!state.memoryStats.length) { grid.innerHTML = '<div style="color:var(--text-dim);padding:20px;font-size:12px">No memory/ folder in this project</div>'; return }
   grid.innerHTML = state.memoryStats.map(s => {
     const cls = s.pct >= 85 ? 'high' : s.pct >= 60 ? 'mid' : 'low'
-    return `<div class="memory-file-row" onclick="previewMemoryFile('${s.file}')"><span class="mem-filename">${s.file}</span><div class="mem-bar-wrap"><div class="mem-bar ${cls}" style="width:${s.pct}%"></div></div><span class="mem-pct">${s.size}/${s.cap}</span></div>`
+    const safeDir = (s.dir || '').replace(/'/g, "\\'")
+    return `<div class="memory-file-row" onclick="previewMemoryFile('${s.file}','${safeDir}')"><span class="mem-filename">${s.file}</span><div class="mem-bar-wrap"><div class="mem-bar ${cls}" style="width:${s.pct}%"></div></div><span class="mem-pct">${s.size}/${s.cap}</span></div>`
   }).join('')
 }
 
-async function previewMemoryFile(file) {
-  const content = await window.helm.readFile(`${state.project.path}/memory/${file}`)
+async function previewMemoryFile(file, dir) {
+  const fullPath = dir ? `${dir}/${file}` : `${state.project?.path}/memory/${file}`
+  const content = await window.helm.readFile(fullPath)
   const detail = document.getElementById('memoryDetail')
-  if (detail) detail.innerHTML = `<strong style="color:var(--accent-bright);display:block;margin-bottom:8px">${file}</strong>${escHtml(content || '(empty)')}`
+  if (detail) detail.innerHTML = `<strong style="color:var(--accent);display:block;margin-bottom:8px">${file}</strong>${escHtml(content || '(empty)')}`
 }
 
 // ─── Agents ───────────────────────────────────────────────────────────────────

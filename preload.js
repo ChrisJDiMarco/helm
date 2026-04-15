@@ -34,6 +34,11 @@ contextBridge.exposeInMainWorld('helm', {
   // Log watcher
   onLogUpdated: (cb) => { ipcRenderer.on('log-updated', cb) },
 
+  // Universe / Wiki
+  loadGraph: () => ipcRenderer.invoke('load-graph'),
+  openObsidian: (filePath) => ipcRenderer.invoke('open-obsidian', filePath),
+  runWikiBuilder: () => ipcRenderer.invoke('run-wiki-builder'),
+
   // Shell
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openInFinder: (p) => ipcRenderer.invoke('open-in-finder', p),

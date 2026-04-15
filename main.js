@@ -138,13 +138,14 @@ ipcMain.handle('detect-projects', async () => {
 
 // ─── Project-relative helpers ─────────────────────────────────────────────────
 ipcMain.handle('list-agents', async (_, projectPath) => {
-  const agentsDir = path.join(projectPath, '.claude', 'agents')
+  const agentsDir    = path.join(projectPath, '.claude', 'agents')
   const globalAgents = path.join(os.homedir(), '.claude', 'agents')
+  const jarvisAgents = path.join(os.homedir(), 'jarvis', '.claude', 'agents')
   const ECC_NAMES = ['planner','architect','code-reviewer','security-reviewer','tdd-guide',
     'e2e-runner','refactor-cleaner','build-error-resolver','performance-optimizer',
     'doc-updater','typescript-reviewer','python-reviewer','go-reviewer','rust-reviewer',
     'loop-operator','harness-optimizer','docs-lookup']
-  const dirs = [agentsDir, globalAgents].filter(d => fs.existsSync(d))
+  const dirs = [agentsDir, jarvisAgents, globalAgents].filter(d => fs.existsSync(d))
   const seen = new Set()
   const agents = []
   for (const dir of dirs) {
@@ -168,14 +169,19 @@ ipcMain.handle('list-agents', async (_, projectPath) => {
 })
 
 ipcMain.handle('read-memory-stats', async (_, projectPath) => {
-  const memDir = path.join(projectPath, 'memory')
-  if (!fs.existsSync(memDir)) return []
+  // Prefer the project's own memory/ folder; fall back to ~/jarvis/memory/
+  const candidates = [
+    path.join(projectPath, 'memory'),
+    path.join(os.homedir(), 'jarvis', 'memory'),
+  ]
+  const memDir = candidates.find(d => fs.existsSync(d))
+  if (!memDir) return []
   try {
     return fs.readdirSync(memDir).filter(f => f.endsWith('.md')).map(file => {
-      const content = fs.existsSync(path.join(memDir, file)) ? fs.readFileSync(path.join(memDir, file), 'utf8') : ''
+      const content = fs.readFileSync(path.join(memDir, file), 'utf8')
       const size = Buffer.byteLength(content, 'utf8')
       const cap = MEMORY_CAPS[file] || 8000
-      return { file, size, cap, pct: Math.min(100, Math.round((size / cap) * 100)) }
+      return { file, size, cap, pct: Math.min(100, Math.round((size / cap) * 100)), dir: memDir }
     })
   } catch (_) { return [] }
 })
@@ -257,6 +263,45 @@ ipcMain.on('claude-stream-start', async (event, { id, apiKey, model, messages, s
   } catch (e) { event.sender.send('stream-error', { id, error: e.message }) }
 })
 
+// ─── Universe / Wiki Graph ────────────────────────────────────────────────────
+const WIKI_ROOT  = path.join(os.homedir(), 'jarvis', 'wiki')
+const GRAPH_FILE = path.join(WIKI_ROOT, 'graph.json')
+const WIKI_BUILDER = path.join(os.homedir(), 'jarvis', 'skills', 'wiki-builder.py')
+
+ipcMain.handle('load-graph', async () => {
+  try {
+    if (!fs.existsSync(GRAPH_FILE)) return null
+    return JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))
+  } catch (_) { return null }
+})
+
+ipcMain.handle('open-obsidian', async (_, filePath) => {
+  // First try to open the corresponding wiki article (inside ~/jarvis/wiki/ vault)
+  // Wiki filenames are {type}_{basename}.md — scan for a match
+  const baseName = path.basename(filePath, '.md')
+  const prefixes = ['skill_', 'agent_', 'project_', 'memory_', 'person_', 'team_', '']
+  for (const prefix of prefixes) {
+    const wikiFile = path.join(WIKI_ROOT, `${prefix}${baseName}.md`)
+    if (fs.existsSync(wikiFile)) {
+      try {
+        const obsUrl = `obsidian://open?path=${encodeURIComponent(wikiFile)}`
+        await shell.openExternal(obsUrl)
+        return { ok: true }
+      } catch (_) {}
+    }
+  }
+  // Fallback: open source file in default app (Obsidian, VS Code, etc.)
+  try { await shell.openPath(filePath); return { ok: true } }
+  catch (e) { return { ok: false, error: e.message } }
+})
+
+ipcMain.handle('run-wiki-builder', async () => {
+  try {
+    const out = execSync(`python3 "${WIKI_BUILDER}"`, { encoding: 'utf8', timeout: 60000 })
+    return { ok: true, output: out }
+  } catch (e) { return { ok: false, error: e.message } }
+})
+
 // ─── Shell helpers ────────────────────────────────────────────────────────────
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
 ipcMain.handle('open-in-finder', (_, p) => shell.openPath(p))
@@ -267,6 +312,10 @@ ipcMain.handle('open-in-terminal', (_, dir) => {
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  // Set dock icon explicitly (required in dev mode on macOS)
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'))
+  }
   createWindow()
   startLogWatcher()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
