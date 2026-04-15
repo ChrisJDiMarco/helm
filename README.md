@@ -4,7 +4,7 @@
 
 Helm gives Claude Code a beautiful, real-time GUI — live hook events, agent roster, memory health bars, session monitoring, and a context-aware chat window. Works with any Claude Code project instantly.
 
-![Helm Screenshot](assets/screenshot.png)
+![Helm Screenshot](https://i.imgur.com/ECHx830.png)
 
 ---
 
