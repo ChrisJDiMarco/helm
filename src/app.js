@@ -42,13 +42,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 })
 
 async function loadConfig() {
-  const cfg = await window.helm.getConfig()
-  if (cfg.apiKey) state.apiKey = cfg.apiKey
-  if (cfg.model) state.model = cfg.model
-  if (cfg.lastProject) {
-    const exists = await window.helm.fileExists(cfg.lastProject)
-    if (exists) await setProject({ path: cfg.lastProject, name: cfg.lastProject.split('/').pop() })
-  }
+  try {
+    const cfg = await window.helm.getConfig()
+    if (cfg.apiKey) state.apiKey = cfg.apiKey
+    if (cfg.model) state.model = cfg.model
+    if (cfg.lastProject) {
+      const exists = await window.helm.fileExists(cfg.lastProject)
+      if (exists) {
+        try {
+          await setProject({ path: cfg.lastProject, name: cfg.lastProject.split('/').pop() })
+        } catch (e) { console.warn('setProject failed during loadConfig:', e) }
+      }
+    }
+  } catch (e) { console.warn('loadConfig error:', e) }
   updateModelLabel()
 }
 
@@ -144,15 +150,18 @@ function switchView(id) {
   state.view = id
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === id))
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${id}`))
-  if (id === 'agents') loadAgents()
-  if (id === 'memory') loadMemoryView()
-  if (id === 'logs') loadLogs()
-  if (id === 'settings') populateSettingsUI()
-  if (id === 'projects') renderProjectSwitcher()
-  if (id === 'orchestrate') loadOrchestrate()
-  if (id === 'factory') factoryInit?.()
-  if (id === 'cognition') loadCognition?.()
-  if (id === 'mirror') loadMirror?.()
+  try {
+    if (id === 'agents')     loadAgents()
+    if (id === 'memory')     loadMemoryView()
+    if (id === 'logs')       loadLogs()
+    if (id === 'settings')   populateSettingsUI()
+    if (id === 'projects')   renderProjectSwitcher()
+    if (id === 'orchestrate') loadOrchestrate?.()
+    if (id === 'factory')    factoryInit?.()
+    if (id === 'cognition')  loadCognition?.()
+    if (id === 'mirror')     loadMirror?.()
+    if (id === 'universe')   initUniverse?.()
+  } catch (e) { console.error('switchView error for', id, e) }
 }
 
 function updateModelLabel() {
@@ -414,20 +423,28 @@ async function previewMemoryFile(file, dir) {
 }
 
 // ─── Agents ───────────────────────────────────────────────────────────────────
+let _agentChipsWired = false
+
 async function loadAgents() {
   if (!state.project) return
   state.agents = await window.helm.listAgents(state.project.path) || []
-  const store = await window.helm.storeGet()
-  state.genome = store.genome || {}
+  try {
+    const store = await window.helm.storeGet()
+    state.genome = store.genome || {}
+  } catch (_) { state.genome = {} }
   const meta = document.getElementById('agentMeta')
   if (meta) { const ecc = state.agents.filter(a => a.isECC).length; meta.textContent = `${state.agents.length} agents · ${state.agents.length - ecc} project · ${ecc} ECC` }
   renderAgentGrid('all')
-  document.querySelectorAll('.filter-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'))
-      chip.classList.add('active'); renderAgentGrid(chip.dataset.filter)
+  // Wire filter chips only once — avoid duplicate listeners on repeated tab visits
+  if (!_agentChipsWired) {
+    _agentChipsWired = true
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'))
+        chip.classList.add('active'); renderAgentGrid(chip.dataset.filter)
+      })
     })
-  })
+  }
 }
 
 function renderAgentGrid(filter) {
@@ -501,17 +518,26 @@ async function populateSettingsUI() {
     const hooks = await window.helm.readHooks()
     hooksDisp.innerHTML = hooks?.length ? hooks.slice(0,12).map(h => `<div class="hook-row"><span class="hook-type">${escHtml(h.type)}</span><span class="hook-cmd">${escHtml((h.command||'').slice(0,55))}</span></div>`).join('') : '<div style="color:var(--text-dim);font-size:11px">No hooks in ~/.claude/settings.json yet</div>'
   }
-  document.getElementById('saveApiKey')?.addEventListener('click', async () => {
+  // Replace buttons with fresh clones to remove any previously attached listeners
+  function rewire(id, fn) {
+    const el = document.getElementById(id)
+    if (!el) return
+    const fresh = el.cloneNode(true)
+    el.parentNode.replaceChild(fresh, el)
+    fresh.addEventListener('click', fn)
+  }
+  rewire('saveApiKey', async () => {
     const key = document.getElementById('apiKeyInput')?.value.trim()
     if (!key?.startsWith('sk-ant-')) { showToast('Key must start with sk-ant-', 'error'); return }
     state.apiKey = key; await saveConfig(); showToast('API key saved ✓', 'success')
   })
-  document.getElementById('modelSelect')?.addEventListener('change', async e => { state.model = e.target.value; updateModelLabel(); await saveConfig() })
-  document.getElementById('openFinderBtn')?.addEventListener('click', () => state.project && window.helm.openInFinder(state.project.path))
-  document.getElementById('openTerminalBtn')?.addEventListener('click', () => state.project && window.helm.openInTerminal(state.project.path))
-  document.getElementById('pickProjectBtn')?.addEventListener('click', pickProject)
-  document.getElementById('refreshMemory')?.addEventListener('click', loadMemoryBars)
-  document.getElementById('refreshSessions')?.addEventListener('click', loadSessions)
+  const modelSel2 = document.getElementById('modelSelect')
+  if (modelSel2) { const fresh = modelSel2.cloneNode(true); modelSel2.parentNode.replaceChild(fresh, modelSel2); fresh.value = state.model; fresh.addEventListener('change', async e => { state.model = e.target.value; updateModelLabel(); await saveConfig() }) }
+  rewire('openFinderBtn', () => state.project && window.helm.openInFinder(state.project.path))
+  rewire('openTerminalBtn', () => state.project && window.helm.openInTerminal(state.project.path))
+  rewire('pickProjectBtn', pickProject)
+  rewire('refreshMemory', loadMemoryBars)
+  rewire('refreshSessions', loadSessions)
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

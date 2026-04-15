@@ -34,6 +34,20 @@ const uState = {
 // ── Init ──────────────────────────────────────────────────────────────────────
 async function initUniverse() {
   if (uState.instance) return
+  // Wait for the CDN lib to load (async script) — retry up to 3s
+  if (typeof ForceGraph3D === 'undefined') {
+    let waited = 0
+    await new Promise(resolve => {
+      const check = setInterval(() => {
+        waited += 100
+        if (typeof ForceGraph3D !== 'undefined' || waited > 3000) { clearInterval(check); resolve() }
+      }, 100)
+    })
+  }
+  if (typeof ForceGraph3D === 'undefined') {
+    showUniverseMsg('error', 'Universe library not loaded — check your internet connection')
+    return
+  }
   injectNebulaBackground()
   await loadAndRender()
   wireUniverseControls()
@@ -292,7 +306,7 @@ function toggleFilter(type) {
 }
 
 // ── State overlays ────────────────────────────────────────────────────────────
-function showUniverseMsg(type) {
+function showUniverseMsg(type, msg) {
   const container = document.getElementById('universe-canvas')
   if (!container) return
   const existing = container.querySelector('.u-overlay')
@@ -301,6 +315,8 @@ function showUniverseMsg(type) {
   el.className = 'u-overlay'
   if (type === 'loading') {
     el.innerHTML = `<div class="u-spinner"></div><p>Compiling your brain…</p>`
+  } else if (type === 'error') {
+    el.innerHTML = `<div class="u-empty-icon">⚠</div><p>${msg || 'Error loading universe'}</p>`
   } else {
     el.innerHTML = `<div class="u-empty-icon">∅</div>
       <p>No graph data yet.</p>

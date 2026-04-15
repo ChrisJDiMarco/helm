@@ -77,7 +77,8 @@ async function loadOrchestrate() {
   orchResize()
 
   // Load genome data
-  const store = await window.helm.storeGet()
+  let store = {}
+  try { store = await window.helm.storeGet() } catch (_) {}
   orchState.genome = store.genome || {}
 
   // Build nodes from agent list

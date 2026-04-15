@@ -50,9 +50,9 @@ async function mirrorAnalyze() {
 
   // Gather data
   const [store, gitLog, claudeMd] = await Promise.all([
-    window.helm.storeGet(),
-    state.project ? window.helm.getGitLog(state.project.path) : Promise.resolve([]),
-    state.project ? window.helm.readClaudeMd(state.project.path) : Promise.resolve(null),
+    window.helm.storeGet().catch(() => ({})),
+    state.project ? window.helm.getGitLog(state.project.path).catch(() => []) : Promise.resolve([]),
+    state.project ? window.helm.readClaudeMd(state.project.path).catch(() => null) : Promise.resolve(null),
   ])
 
   // Read all memory files for content
