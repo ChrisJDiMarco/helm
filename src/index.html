@@ -110,6 +110,12 @@
             <div class="hook-chip" data-hook="Stop">Stop</div>
             <div class="hook-chip" data-hook="PreCompact">PreCompact</div>
           </div>
+          <div class="agent-select-row">
+            <label class="agent-select-label">Agent:</label>
+            <select id="agentSelect" class="agent-select">
+              <option value="">— Default (CLAUDE.md context) —</option>
+            </select>
+          </div>
           <div class="input-wrapper">
             <textarea id="chatInput" placeholder="Ask Claude… (⌘K)" rows="1"></textarea>
             <button class="send-btn" id="sendBtn" disabled>
@@ -186,6 +192,14 @@
             <div class="factory-log" id="factoryLog"><div class="factory-log-empty">Factory output appears here…</div></div>
           </div>
         </div>
+        <!-- Task output viewer — slides in when a node is clicked -->
+        <div class="factory-output-panel" id="factoryOutputPanel" style="display:none">
+          <div class="factory-output-header">
+            <span class="factory-output-title" id="factoryOutputTitle">Task Output</span>
+            <button class="factory-output-close" onclick="hideTaskOutput()">✕</button>
+          </div>
+          <div class="factory-output-body" id="factoryOutputBody"></div>
+        </div>
       </section>
 
       <!-- COGNITION -->
@@ -254,9 +268,9 @@
 
       <!-- MEMORY -->
       <section class="view" id="view-memory">
-        <div class="view-header"><h2>Memory Files</h2><div class="view-meta">Click a file to preview</div></div>
+        <div class="view-header"><h2>Memory Files</h2><div class="view-meta">Click a file to edit · ⌘S to save</div></div>
         <div class="memory-grid" id="memoryGrid"></div>
-        <div class="memory-detail" id="memoryDetail"><div class="memory-detail-placeholder">← Select a file to preview</div></div>
+        <div class="memory-detail" id="memoryDetail"><div class="memory-detail-placeholder">← Select a file to edit</div></div>
       </section>
 
       <!-- LOGS -->
@@ -319,6 +333,14 @@
             </div>
           </div>
           <div class="settings-group"><label>Active Hooks (from ~/.claude/settings.json)</label><div class="hooks-display" id="hooksDisplay">Loading…</div></div>
+          <div class="settings-group">
+            <label>Hook Server</label>
+            <div class="settings-row">
+              <span class="settings-hint" id="hookServerStatus">Checking…</span>
+              <button class="btn-secondary" id="installHooksBtn">Install Helm Hooks</button>
+            </div>
+            <span class="settings-hint">Installs curl hooks into ~/.claude/settings.json to send real events to Helm's live feed</span>
+          </div>
         </div>
       </section>
 

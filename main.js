@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron')
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
+const http = require('http')
 const { execSync } = require('child_process')
 
 // ─── Config persistence ───────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ ipcMain.handle('list-agents', async (_, projectPath) => {
         })
         const name = fm.name || file.replace('.md','')
         agents.push({ file, name, description: fm.description || '', model: fm.model || 'claude-sonnet-4-6',
-          isECC: ECC_NAMES.includes(name) })
+          isECC: ECC_NAMES.includes(name), filePath: path.join(dir, file) })
       }
     } catch (_) {}
   }
@@ -268,12 +269,7 @@ const WIKI_ROOT  = path.join(os.homedir(), 'jarvis', 'wiki')
 const GRAPH_FILE = path.join(WIKI_ROOT, 'graph.json')
 const WIKI_BUILDER = path.join(os.homedir(), 'jarvis', 'skills', 'wiki-builder.py')
 
-ipcMain.handle('load-graph', async () => {
-  try {
-    if (!fs.existsSync(GRAPH_FILE)) return null
-    return JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))
-  } catch (_) { return null }
-})
+// load-graph is defined below in the auto-graph section
 
 ipcMain.handle('open-obsidian', async (_, filePath) => {
   // First try to open the corresponding wiki article (inside ~/jarvis/wiki/ vault)
@@ -508,6 +504,189 @@ ${genomeSummary || '(no usage data yet)'}`
   } catch (e) { event.sender.send('mirror-error', { id, error: e.message }) }
 })
 
+// ─── Co-occurrence store (for real Orchestrate edges) ────────────────────────
+ipcMain.handle('increment-cooccurrence', (_, agentA, agentB) => {
+  const store = loadStore()
+  if (!store.cooccurrence) store.cooccurrence = {}
+  const key = [agentA, agentB].sort().join('|')
+  store.cooccurrence[key] = (store.cooccurrence[key] || 0) + 1
+  saveStore(store); return { ok: true }
+})
+
+// ─── Universe — Auto Graph Builder ───────────────────────────────────────────
+function buildAutoGraph(projectPath) {
+  const nodes = []; const links = []
+  const nodeIds = new Set()
+
+  function addNode(id, label, type, subtype, excerpt, tags) {
+    if (nodeIds.has(id)) return
+    nodeIds.add(id)
+    nodes.push({ id, label, type, subtype: subtype || type, excerpt: (excerpt || '').slice(0, 120), tags: tags || [], path: id })
+  }
+
+  function addLink(source, target, type) {
+    if (nodeIds.has(source) && nodeIds.has(target))
+      links.push({ source, target, type })
+  }
+
+  // Scan memory files
+  const memDirs = [
+    path.join(projectPath, 'memory'),
+    path.join(os.homedir(), 'jarvis', 'memory'),
+  ].filter(d => fs.existsSync(d))
+
+  const MEMORY_LAYERS = { 'core.md': 'memory_L0', 'L1-critical-facts.md': 'memory_L1', 'context.md': 'memory_L2', 'decisions.md': 'memory_L2', 'learnings.md': 'memory_L2', 'relationships.md': 'memory_L3' }
+  for (const dir of memDirs) {
+    try {
+      for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+        const fullPath = path.join(dir, file)
+        const content = fs.readFileSync(fullPath, 'utf8').slice(0, 300)
+        const subtype = MEMORY_LAYERS[file] || 'memory_L2'
+        addNode(fullPath, file.replace('.md', ''), 'memory', subtype, content)
+        // Link layer nodes
+        if (file !== 'core.md') {
+          const coreFile = path.join(dir, 'core.md')
+          if (nodeIds.has(coreFile)) addLink(coreFile, fullPath, 'layer')
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Scan agents
+  const agentDirs = [
+    path.join(projectPath, '.claude', 'agents'),
+    path.join(os.homedir(), 'jarvis', '.claude', 'agents'),
+    path.join(os.homedir(), '.claude', 'agents'),
+  ].filter(d => fs.existsSync(d))
+
+  for (const dir of agentDirs) {
+    try {
+      for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+        const fullPath = path.join(dir, file)
+        const content = fs.readFileSync(fullPath, 'utf8')
+        const fm = {}; const m = content.match(/^---\n([\s\S]*?)\n---/)
+        if (m) m[1].split('\n').forEach(l => { const [k,...v] = l.split(':'); if (k) fm[k.trim()] = v.join(':').trim() })
+        const name = fm.name || file.replace('.md','')
+        addNode(fullPath, name, 'agent', 'agent', fm.description, [])
+        // Link agents to core memory
+        for (const dir2 of memDirs) {
+          const coreFile = path.join(dir2, 'core.md')
+          if (nodeIds.has(coreFile)) addLink(coreFile, fullPath, 'reference')
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Scan skills
+  const skillDirs = [
+    path.join(projectPath, 'skills'),
+    path.join(os.homedir(), 'jarvis', 'skills'),
+  ].filter(d => fs.existsSync(d))
+
+  for (const dir of skillDirs) {
+    try {
+      for (const entry of fs.readdirSync(dir)) {
+        const full = path.join(dir, entry)
+        if (entry.endsWith('.md') && !entry.startsWith('ecc')) {
+          const content = fs.readFileSync(full, 'utf8').slice(0, 200)
+          addNode(full, entry.replace('.md',''), 'skill', 'skill', content)
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Link agents to skills by name match
+  for (const n of nodes.filter(n => n.type === 'agent')) {
+    for (const s of nodes.filter(n => n.type === 'skill')) {
+      if (s.label.includes(n.label) || n.label.includes(s.label))
+        addLink(n.id, s.id, 'reference')
+    }
+  }
+
+  return { nodes, links, meta: { generated: new Date().toISOString(), projectPath } }
+}
+
+ipcMain.handle('load-graph', async (_, projectPath) => {
+  // Try wiki graph.json first
+  try {
+    if (fs.existsSync(GRAPH_FILE)) return JSON.parse(fs.readFileSync(GRAPH_FILE, 'utf8'))
+  } catch (_) {}
+  // Fall back to auto-generated graph from project files
+  if (projectPath) {
+    const graph = buildAutoGraph(projectPath)
+    if (graph.nodes.length) return graph
+  }
+  return null
+})
+
+// ─── Live Hook Server (receives real Claude Code hook events via HTTP POST) ───
+let hookServer = null
+
+function startHookServer() {
+  if (hookServer) return
+  hookServer = http.createServer((req, res) => {
+    if (req.method !== 'POST') { res.writeHead(200); res.end('Helm hook server OK'); return }
+    let body = ''
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => {
+      try {
+        const event = JSON.parse(body)
+        if (mainWindow && !mainWindow.isDestroyed())
+          mainWindow.webContents.send('hook-event', event)
+      } catch (_) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    })
+    req.on('error', () => { res.writeHead(400); res.end() })
+  })
+  hookServer.on('error', e => {
+    if (e.code !== 'EADDRINUSE') console.warn('Helm hook server error:', e.message)
+  })
+  hookServer.listen(7841, '127.0.0.1')
+}
+
+function stopHookServer() {
+  if (hookServer) { hookServer.close(); hookServer = null }
+}
+
+ipcMain.handle('hook-server-status', () => ({
+  running: !!hookServer,
+  port: 7841,
+  url: 'http://127.0.0.1:7841'
+}))
+
+ipcMain.handle('install-helm-hooks', async () => {
+  try {
+    if (!fs.existsSync(CLAUDE_SETTINGS)) {
+      fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true })
+      fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify({ hooks: {} }, null, 2))
+    }
+    const settings = JSON.parse(fs.readFileSync(CLAUDE_SETTINGS, 'utf8'))
+    if (!settings.hooks) settings.hooks = {}
+
+    const hookTypes = ['PreToolUse', 'PostToolUse', 'Stop']
+    for (const hookType of hookTypes) {
+      if (!settings.hooks[hookType]) settings.hooks[hookType] = []
+      // Check if Helm hook already installed
+      const existing = settings.hooks[hookType]
+      const helmInstalled = existing.some(entry =>
+        entry.hooks?.some(h => h.command?.includes('helm') || h.command?.includes('7841'))
+      )
+      if (!helmInstalled) {
+        settings.hooks[hookType].push({
+          matcher: '',
+          hooks: [{
+            type: 'command',
+            command: `curl -s -X POST http://127.0.0.1:7841 -H "Content-Type: application/json" -d '{"type":"${hookType}","ts":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' || true`
+          }]
+        })
+      }
+    }
+    fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(settings, null, 2))
+    return { ok: true }
+  } catch (e) { return { ok: false, error: e.message } }
+})
+
 // ─── Shell helpers ────────────────────────────────────────────────────────────
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url))
 ipcMain.handle('open-in-finder', (_, p) => shell.openPath(p))
@@ -524,7 +703,8 @@ app.whenReady().then(() => {
   }
   createWindow()
   startLogWatcher()
+  startHookServer()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
-app.on('window-all-closed', () => { stopLogWatcher(); if (process.platform !== 'darwin') app.quit() })
-app.on('before-quit', stopLogWatcher)
+app.on('window-all-closed', () => { stopLogWatcher(); stopHookServer(); if (process.platform !== 'darwin') app.quit() })
+app.on('before-quit', () => { stopLogWatcher(); stopHookServer() })

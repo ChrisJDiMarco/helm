@@ -140,6 +140,38 @@ async function buildSystemPrompt() {
     : `You are an AI assistant working on the project "${state.project.name}" at ${state.project.path}. Be direct, helpful, and follow good Claude Code conventions.`
 }
 
+async function getActiveSystemPrompt() {
+  const sel = document.getElementById('agentSelect')
+  const agentName = sel?.value
+  if (!agentName) return state.systemPrompt
+
+  // Find the agent file path and read its content
+  const agent = state.agents.find(a => a.name === agentName)
+  if (!agent?.filePath) return state.systemPrompt
+
+  const content = await window.helm.readFile(agent.filePath).catch(() => null)
+  if (!content) return state.systemPrompt
+
+  // Strip YAML frontmatter (--- ... ---) to get the agent's instruction body
+  const bodyMatch = content.match(/^---[\s\S]*?---\s*\n([\s\S]*)/)
+  const body = bodyMatch ? bodyMatch[1].trim() : content.trim()
+  return body || state.systemPrompt
+}
+
+function populateAgentSelector() {
+  const sel = document.getElementById('agentSelect')
+  if (!sel) return
+  const current = sel.value
+  sel.innerHTML = '<option value="">— Default (CLAUDE.md context) —</option>'
+  state.agents.forEach(a => {
+    const opt = document.createElement('option')
+    opt.value = a.name
+    opt.textContent = `${a.isECC ? '[ECC] ' : ''}${a.name}`
+    if (a.name === current) opt.selected = true
+    sel.appendChild(opt)
+  })
+}
+
 // ─── Navigation ───────────────────────────────────────────────────────────────
 function wireNavigation() {
   document.querySelectorAll('.nav-item[data-view]').forEach(btn =>
@@ -222,9 +254,12 @@ async function sendMessage() {
   state.streaming = true; state.currentTypingId = `typing-${id}`
   appendTypingIndicator(state.currentTypingId)
   flashHookChip('PreToolUse')
-  addFeedEntry('PreToolUse', 'helm:stream-start', `Sending to ${state.model}`)
 
-  window.helm.streamStart(id, state.apiKey, state.model, state.messages, state.systemPrompt)
+  const agentName = document.getElementById('agentSelect')?.value || ''
+  addFeedEntry('PreToolUse', 'helm:stream-start', `Sending to ${state.model}${agentName ? ` via ${agentName}` : ''}`)
+
+  const activeSystem = await getActiveSystemPrompt()
+  window.helm.streamStart(id, state.apiKey, state.model, state.messages, activeSystem)
 }
 
 // ─── Stream listeners ─────────────────────────────────────────────────────────
@@ -370,7 +405,7 @@ const HOOK_EVENTS = [
 ]
 
 function startLiveFeed() {
-  addFeedEntry('SessionStart', 'helm:online', 'Helm started')
+  addFeedEntry('SessionStart', 'helm:online', 'Helm started · hook server on :7841')
   setTimeout(() => addFeedEntry('PostToolUse','command-log-audit','Watching ~/.claude/bash-commands.log'), 1200)
   setInterval(() => {
     const evt = HOOK_EVENTS[Math.floor(Math.random() * HOOK_EVENTS.length)]
@@ -382,6 +417,14 @@ function wireLogWatcher() {
   window.helm.onLogUpdated(() => {
     addFeedEntry('PostToolUse','command-log-audit','bash-commands.log updated')
     if (state.view === 'logs') loadLogs()
+  })
+  // Wire real hook events from the HTTP server
+  window.helm.onHookEvent?.(event => {
+    const type = event.type || 'PostToolUse'
+    const hook = event.hook || event.matcher || 'claude-hook'
+    const detail = event.tool || event.command || event.detail || JSON.stringify(event).slice(0, 60)
+    addFeedEntry(type, hook, detail)
+    flashHookChip(type)
   })
 }
 
@@ -419,7 +462,33 @@ async function previewMemoryFile(file, dir) {
   const fullPath = dir ? `${dir}/${file}` : `${state.project?.path}/memory/${file}`
   const content = await window.helm.readFile(fullPath)
   const detail = document.getElementById('memoryDetail')
-  if (detail) detail.innerHTML = `<strong style="color:var(--accent);display:block;margin-bottom:8px">${file}</strong>${escHtml(content || '(empty)')}`
+  if (!detail) return
+
+  detail.innerHTML = `
+    <div class="mem-editor-header">
+      <strong style="color:var(--accent-bright)">${escHtml(file)}</strong>
+      <button class="btn-save mem-save-btn" id="memSaveBtn">Save</button>
+    </div>
+    <textarea class="mem-editor-textarea" id="memEditorTextarea" spellcheck="false">${escHtml(content || '')}</textarea>
+    <div class="mem-editor-hint">⌘S to save · Edits are written directly to the file</div>`
+
+  const doSave = async () => {
+    const textarea = document.getElementById('memEditorTextarea')
+    if (!textarea) return
+    const result = await window.helm.writeFile(fullPath, textarea.value)
+    if (result?.ok) {
+      showToast(`${file} saved ✓`, 'success')
+      await loadMemoryView()
+      await loadMemoryBars()
+    } else {
+      showToast(`Save failed: ${result?.error || 'unknown error'}`, 'error')
+    }
+  }
+
+  document.getElementById('memSaveBtn').addEventListener('click', doSave)
+  document.getElementById('memEditorTextarea').addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); doSave() }
+  })
 }
 
 // ─── Agents ───────────────────────────────────────────────────────────────────
@@ -435,6 +504,7 @@ async function loadAgents() {
   const meta = document.getElementById('agentMeta')
   if (meta) { const ecc = state.agents.filter(a => a.isECC).length; meta.textContent = `${state.agents.length} agents · ${state.agents.length - ecc} project · ${ecc} ECC` }
   renderAgentGrid('all')
+  populateAgentSelector()
   // Wire filter chips only once — avoid duplicate listeners on repeated tab visits
   if (!_agentChipsWired) {
     _agentChipsWired = true
@@ -538,6 +608,19 @@ async function populateSettingsUI() {
   rewire('pickProjectBtn', pickProject)
   rewire('refreshMemory', loadMemoryBars)
   rewire('refreshSessions', loadSessions)
+
+  // Hook server status
+  const hookServerEl = document.getElementById('hookServerStatus')
+  if (hookServerEl) {
+    const status = await window.helm.hookServerStatus().catch(() => null)
+    hookServerEl.textContent = status?.running ? `● Running on port ${status.port}` : '○ Not running'
+    hookServerEl.style.color = status?.running ? '#059669' : '#dc2626'
+  }
+  rewire('installHooksBtn', async () => {
+    const result = await window.helm.installHelmHooks()
+    if (result.ok) showToast('Helm hooks installed in ~/.claude/settings.json ✓', 'success')
+    else showToast(`Hook install failed: ${result.error}`, 'error')
+  })
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

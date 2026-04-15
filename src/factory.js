@@ -6,9 +6,11 @@
 
 const factoryState = {
   graph: null,
-  taskStatus: {},   // taskId → 'pending'|'running'|'done'|'error'
+  taskStatus: {},    // taskId → 'pending'|'running'|'done'|'error'
+  taskOutputs: {},   // taskId → string (captured LLM output)
   running: false,
   initialized: false,
+  selectedTaskId: null,
 }
 
 function factoryInit() {
@@ -65,43 +67,65 @@ function factoryDecompose() {
 async function factoryLaunch() {
   if (!factoryState.graph || factoryState.running) return
   factoryState.running = true
+  factoryState.taskOutputs = {}
   setBadge('Running', 'running')
   document.getElementById('factoryLaunchBtn').disabled = true
   document.getElementById('factoryDecomposeBtn').disabled = true
 
   const tasks = factoryState.graph.tasks
-  factoryLog(`▶ Launching ${tasks.length}-task factory…`, 'running')
+  factoryLog(`▶ Launching ${tasks.length}-task factory (parallel mode)…`, 'running')
 
-  // Execute tasks respecting dependencies
+  // Execute tasks in waves — all tasks whose deps are satisfied run simultaneously
   const done = new Set()
-  const maxRounds = tasks.length * 2
+  const maxRounds = tasks.length + 2
 
   for (let round = 0; round < maxRounds && done.size < tasks.length; round++) {
     const ready = tasks.filter(t =>
       !done.has(t.id) &&
       factoryState.taskStatus[t.id] !== 'done' &&
+      factoryState.taskStatus[t.id] !== 'running' &&
       (t.depends || []).every(dep => done.has(dep))
     )
-
     if (!ready.length) break
 
-    for (const task of ready) {
+    // Mark all ready tasks as running immediately
+    ready.forEach(task => {
       factoryState.taskStatus[task.id] = 'running'
       updateTaskNode(task.id, 'running')
       factoryLog(`▶ [${task.agent}] ${task.name}`, 'running')
+    })
 
-      try {
-        await runFactoryTask(task)
+    // Run them all in parallel
+    const results = await Promise.allSettled(ready.map(task => runFactoryTask(task)))
+
+    // Process results
+    const completedAgents = []
+    ready.forEach((task, i) => {
+      const result = results[i]
+      if (result.status === 'fulfilled') {
         factoryState.taskStatus[task.id] = 'done'
+        factoryState.taskOutputs[task.id] = result.value
         done.add(task.id)
         updateTaskNode(task.id, 'done')
-        factoryLog(`✓ [${task.agent}] ${task.name} complete`, 'success')
-        await window.helm.recordAgentUse({ agentName: task.agent, sessionId: 'factory-' + Date.now(), cost: task.estimatedCost || 0, success: true })
-      } catch (e) {
+        factoryLog(`✓ [${task.agent}] ${task.name} — ${result.value?.length || 0} chars`, 'success')
+        completedAgents.push(task.agent)
+        window.helm.recordAgentUse({ agentName: task.agent, sessionId: 'factory-' + Date.now(), cost: task.estimatedCost || 0, success: true })
+      } else {
         factoryState.taskStatus[task.id] = 'error'
+        factoryState.taskOutputs[task.id] = `Error: ${result.reason?.message || 'unknown'}`
+        done.add(task.id)
         updateTaskNode(task.id, 'error')
-        factoryLog(`✗ [${task.agent}] ${task.name}: ${e.message}`, 'error')
-        done.add(task.id)  // continue despite error
+        factoryLog(`✗ [${task.agent}] ${task.name}: ${result.reason?.message}`, 'error')
+        window.helm.recordAgentUse({ agentName: task.agent, sessionId: 'factory-' + Date.now(), cost: 0, success: false })
+      }
+    })
+
+    // Record co-occurrences for pairs of agents that ran together
+    if (completedAgents.length > 1) {
+      for (let i = 0; i < completedAgents.length; i++) {
+        for (let j = i + 1; j < completedAgents.length; j++) {
+          window.helm.incrementCooccurrence?.(completedAgents[i], completedAgents[j])
+        }
       }
     }
   }
@@ -109,12 +133,12 @@ async function factoryLaunch() {
   factoryState.running = false
   const errors = Object.values(factoryState.taskStatus).filter(s => s === 'error').length
   if (errors === 0) {
-    setBadge('Complete', 'done')
-    factoryLog(`✦ Factory complete — ${tasks.length} tasks executed`, 'success')
+    setBadge('Complete ✓', 'done')
+    factoryLog(`✦ Factory complete — ${tasks.length} tasks · click nodes to view output`, 'success')
     await window.helm.recordDecision({ description: `Dark Factory: ${factoryState.graph.title}`, source: 'factory' })
   } else {
     setBadge('Done (errors)', 'error')
-    factoryLog(`⚠ Factory done with ${errors} error(s)`, 'error')
+    factoryLog(`⚠ Factory done with ${errors} error(s) · click nodes to view output`, 'error')
   }
   document.getElementById('factoryDecomposeBtn').disabled = false
 }
@@ -123,34 +147,37 @@ function runFactoryTask(task) {
   return new Promise((resolve, reject) => {
     if (!state.apiKey) { reject(new Error('No API key')); return }
 
-    const id = 'factory-task-' + Date.now()
+    // Use a unique ID per task — Math.random prevents collisions between parallel tasks
+    const id = `factory-task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
     let text = ''
-    let done = false
+    let settled = false
 
     const onChunk = ({ id: cid, text: t }) => { if (cid === id) text += t }
     const onDone  = ({ id: cid }) => {
-      if (cid === id && !done) { done = true; resolve(text) }
+      if (cid === id && !settled) { settled = true; resolve(text) }
     }
     const onError = ({ id: cid, error }) => {
-      if (cid === id && !done) { done = true; reject(new Error(error)) }
+      if (cid === id && !settled) { settled = true; reject(new Error(error)) }
     }
 
     window.helm.onStreamChunk(onChunk)
     window.helm.onStreamDone(onDone)
     window.helm.onStreamError(onError)
 
-    const system = state.systemPrompt || `You are ${task.agent}, a specialist AI agent. Complete the task concisely and return structured output.`
+    const system = `You are ${task.agent}, a specialist AI agent in the Helm multi-agent system. Complete the following task concisely and return well-structured output. Project context: ${state.project?.name || 'unknown'}.`
     window.helm.streamStart(id, state.apiKey, state.model, [{ role: 'user', content: task.prompt }], system)
 
-    // Timeout safety
-    setTimeout(() => { if (!done) { done = true; resolve(text || '(timeout — partial result)') } }, 60000)
+    // 90-second timeout per task
+    setTimeout(() => { if (!settled) { settled = true; resolve(text || '(timeout — partial result saved)') } }, 90000)
   })
 }
 
 function factoryClear() {
   factoryState.graph = null
   factoryState.taskStatus = {}
+  factoryState.taskOutputs = {}
   factoryState.running = false
+  factoryState.selectedTaskId = null
   document.getElementById('factoryGoal').value = ''
   document.getElementById('factoryLog').innerHTML = '<div class="factory-log-empty">Factory output appears here…</div>'
   document.getElementById('factoryCostRow').style.display = 'none'
@@ -273,6 +300,8 @@ function renderFactoryGraph() {
     cost.textContent = `~$${(t.estimatedCost || 0).toFixed(3)}`
 
     g.appendChild(rect); g.appendChild(name); g.appendChild(agent); g.appendChild(cost)
+    g.style.cursor = 'pointer'
+    g.addEventListener('click', () => showTaskOutput(t.id, t.name))
     svg.appendChild(g)
   })
 
@@ -295,6 +324,37 @@ function updateTaskNode(taskId, status) {
 function clearFactoryGraph() {
   const svg = document.getElementById('factory-svg')
   if (svg) svg.innerHTML = ''
+  hideTaskOutput()
+}
+
+function showTaskOutput(taskId, taskName) {
+  const output = factoryState.taskOutputs[taskId]
+  const status = factoryState.taskStatus[taskId]
+  const panel = document.getElementById('factoryOutputPanel')
+  const title = document.getElementById('factoryOutputTitle')
+  const body = document.getElementById('factoryOutputBody')
+  if (!panel || !body) return
+
+  factoryState.selectedTaskId = taskId
+  title.textContent = taskName || taskId
+
+  if (!output && status === 'pending') {
+    body.innerHTML = '<div class="factory-output-empty">This task hasn\'t run yet</div>'
+  } else if (!output && status === 'running') {
+    body.innerHTML = '<div class="factory-output-empty">⏳ Running…</div>'
+  } else if (output) {
+    // Render markdown-ish output
+    body.innerHTML = `<pre class="factory-output-pre">${escHtml(output)}</pre>`
+  } else {
+    body.innerHTML = '<div class="factory-output-empty">No output captured</div>'
+  }
+  panel.style.display = 'flex'
+}
+
+function hideTaskOutput() {
+  const panel = document.getElementById('factoryOutputPanel')
+  if (panel) panel.style.display = 'none'
+  factoryState.selectedTaskId = null
 }
 
 // Initialize when DOM ready

@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('helm', {
   onLogUpdated: (cb) => { ipcRenderer.on('log-updated', cb) },
 
   // Universe / Wiki
-  loadGraph: () => ipcRenderer.invoke('load-graph'),
+  loadGraph: (projectPath) => ipcRenderer.invoke('load-graph', projectPath),
   openObsidian: (filePath) => ipcRenderer.invoke('open-obsidian', filePath),
   runWikiBuilder: () => ipcRenderer.invoke('run-wiki-builder'),
 
@@ -70,4 +70,12 @@ contextBridge.exposeInMainWorld('helm', {
   mirrorAnalyze: (data) => ipcRenderer.send('mirror-analyze', data),
   onMirrorDone: (cb) => ipcRenderer.on('mirror-done', (_, d) => cb(d)),
   onMirrorError: (cb) => ipcRenderer.on('mirror-error', (_, d) => cb(d)),
+
+  // Co-occurrence (Orchestrate real edges)
+  incrementCooccurrence: (a, b) => ipcRenderer.invoke('increment-cooccurrence', a, b),
+
+  // Hook server
+  hookServerStatus: () => ipcRenderer.invoke('hook-server-status'),
+  installHelmHooks: () => ipcRenderer.invoke('install-helm-hooks'),
+  onHookEvent: (cb) => ipcRenderer.on('hook-event', (_, d) => cb(d)),
 })

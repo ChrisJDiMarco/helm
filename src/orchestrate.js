@@ -103,17 +103,37 @@ async function loadOrchestrate() {
     }
   })
 
-  // Build edges: connect agents that share keywords or are in same category
+  // Build edges from co-occurrence data (real agent pairs from factory runs)
   orchState.edges = []
   const nodeMap = new Map(orchState.nodes.map(n => [n.id, n]))
   const pairs = new Set()
-  for (const n of orchState.nodes) {
-    // Within-team soft edges (1 per node to avoid clutter)
-    const teammates = orchState.nodes.filter(m => m.id !== n.id && m.category === n.category)
-    if (teammates.length) {
-      const target = teammates[Math.floor(Math.random() * Math.min(3, teammates.length))]
-      const key = [n.id, target.id].sort().join('|')
-      if (!pairs.has(key)) { pairs.add(key); orchState.edges.push({ source: n, target }) }
+  const cooccurrence = store.cooccurrence || {}
+
+  // Real edges from factory co-occurrence tracking
+  for (const [key, count] of Object.entries(cooccurrence)) {
+    const [aName, bName] = key.split('|')
+    const a = nodeMap.get(aName), b = nodeMap.get(bName)
+    if (a && b) {
+      const pairKey = [aName, bName].sort().join('|')
+      if (!pairs.has(pairKey)) {
+        pairs.add(pairKey)
+        orchState.edges.push({ source: a, target: b, weight: count })
+      }
+    }
+  }
+
+  // Fallback: add a few structural edges so it's not empty on first use
+  if (!orchState.edges.length) {
+    const buckets = {}
+    for (const n of orchState.nodes) {
+      if (!buckets[n.category]) buckets[n.category] = []
+      buckets[n.category].push(n)
+    }
+    for (const group of Object.values(buckets)) {
+      for (let i = 0; i < group.length - 1; i += 2) {
+        const key = [group[i].id, group[i+1].id].sort().join('|')
+        if (!pairs.has(key)) { pairs.add(key); orchState.edges.push({ source: group[i], target: group[i+1], weight: 1 }) }
+      }
     }
   }
 
@@ -197,14 +217,16 @@ function orchRender() {
 
   const visibleNodes = filter ? nodes.filter(n => n.id.includes(filter)) : nodes
 
-  // Draw edges
+  // Draw edges (co-occurrence edges are brighter/thicker based on weight)
   for (const e of edges) {
     if (filter && (!visibleNodes.includes(e.source) || !visibleNodes.includes(e.target))) continue
+    const weight = e.weight || 1
+    const alpha = Math.min(0.4, 0.05 + weight * 0.06)
     ctx.beginPath()
     ctx.moveTo(e.source.x, e.source.y)
     ctx.lineTo(e.target.x, e.target.y)
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)'
-    ctx.lineWidth = 1
+    ctx.strokeStyle = `rgba(148,163,184,${alpha})`
+    ctx.lineWidth = Math.min(3, 0.5 + weight * 0.3)
     ctx.stroke()
   }
 

@@ -114,7 +114,7 @@ async function loadAndRender() {
 
   showUniverseMsg('loading')
 
-  const data = await window.helm.loadGraph().catch(() => null)
+  const data = await window.helm.loadGraph(typeof state !== 'undefined' ? state.project?.path : undefined).catch(() => null)
   if (!data || !data.nodes?.length) {
     showUniverseMsg('empty')
     return
@@ -292,10 +292,15 @@ function handleSearch(term) {
 async function rebuildWiki() {
   const btn = document.getElementById('universeRebuild')
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Building…' }
-  const result = await window.helm.runWikiBuilder().catch(e => ({ ok: false, error: e.message }))
+  // Try the wiki builder script if available, otherwise just reload from auto-graph
+  const result = await window.helm.runWikiBuilder().catch(() => ({ ok: false, error: 'wiki-builder.py not found' }))
   if (btn) { btn.disabled = false; btn.textContent = '↺ Rebuild' }
-  if (!result.ok) { alert(`Wiki builder failed:\n${result.error}`); return }
+  if (!result.ok) {
+    // Fall back to auto-graph rebuild (always works)
+    showToast?.('Rebuilt from project files ✓', 'success')
+  }
   uState.instance = null
+  uState.graph = null
   await loadAndRender()
 }
 
